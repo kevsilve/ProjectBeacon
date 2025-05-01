@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import openai
 
+from utils.models import grad_rate, srs_from_literacy, juvenile_risk, college_readiness
+from utils.gpt_prompt import generate_prompt
+
 # --- CONFIG ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]  # Add your OpenAI API key to Streamlit secrets
 
@@ -23,19 +26,6 @@ data = {
     }
 }
 
-# --- IMPACT CURVE MODELS ---
-def grad_rate(absenteeism):
-    return 95 - 0.8 * (absenteeism - 5) ** 1.1
-
-def srs_from_lit(lit):
-    return 100 - 0.8 * (lit - 70)
-
-def juvenile_risk(programs):
-    return 40 - 10 * np.log1p(programs)
-
-def readiness_score(internet):
-    return 0.7 * internet - 20
-
 # --- STREAMLIT APP ---
 st.title("📍 Project Beacon Simulator")
 st.write("Use local education, health, and infrastructure data to predict youth outcomes and plan strategic interventions.")
@@ -48,9 +38,9 @@ with st.expander("📊 Current Baseline Metrics"):
     st.json(baseline)
 
 # Projections
-srs = srs_from_lit(baseline["Literacy"])
+srs = srs_from_literacy(baseline["Literacy"])
 grad = grad_rate(baseline["Absenteeism"])
-readiness = readiness_score(baseline["Internet_Access"])
+readiness = college_readiness(baseline["Internet_Access"])
 juv_risk = juvenile_risk(baseline["Youth_Programs"])
 
 st.subheader("📈 Projected Outcomes (Current)")
@@ -61,15 +51,7 @@ st.metric("Juvenile Risk Index", f"{juv_risk:.1f}")
 
 # --- GPT-BASED ACTION PLAN ---
 st.subheader("🧠 Suggested Intervention Plan")
-prompt = f"""
-Given the following data for {county} County:
-- Absenteeism: {baseline['Absenteeism']}%
-- Literacy: {baseline['Literacy']}%
-- Youth Programs: {baseline['Youth_Programs']}
-- Internet Access: {baseline['Internet_Access']}%
-Suggest 3 specific, actionable steps that could help achieve the goal: "{goal_type}".
-Include cost considerations, partners, and expected impact.
-"""
+prompt = generate_prompt(county, baseline, goal_type)
 
 if st.button("💡 Generate Action Plan"):
     with st.spinner("Thinking like a policy analyst..."):
