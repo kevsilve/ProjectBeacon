@@ -3,12 +3,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import openai
+from openai import OpenAI
 
 from utils.models import grad_rate, srs_from_literacy, juvenile_risk, college_readiness
 from utils.gpt_prompt import generate_prompt
 
 # --- CONFIG ---
-openai.api_key = st.secrets["OPENAI_API_KEY"]  # Add your OpenAI API key to Streamlit secrets
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])  # Updated for OpenAI v1
 
 # --- COUNTY DATA ---
 data = {
@@ -17,12 +18,14 @@ data = {
         "Literacy": 88,
         "Youth_Programs": 4,
         "Internet_Access": 83.8,
+        "Goals": {"SRS": 35.0, "Grad": 90.0, "Readiness": 45.0}
     },
     "Monroe": {
         "Absenteeism": 18.4,
         "Literacy": 92,
         "Youth_Programs": 8,
         "Internet_Access": 91.2,
+        "Goals": {"SRS": 30.0, "Grad": 92.0, "Readiness": 50.0}
     }
 }
 
@@ -31,31 +34,61 @@ st.title("📍 Project Beacon Simulator")
 st.write("Use local education, health, and infrastructure data to predict youth outcomes and plan strategic interventions.")
 
 county = st.selectbox("Select a County", list(data.keys()))
-goal_type = st.selectbox("Set a Goal", ["Reduce SRS < 35", "Increase Graduation Rate > 90%", "Boost College Readiness > 45"])
+goal_type = st.selectbox("Set a Goal", ["Reduce SRS < X", "Increase Graduation Rate > X", "Boost College Readiness > X"])
 
 baseline = data[county]
+goals = baseline.get("Goals", {"SRS": 35.0, "Grad": 90.0, "Readiness": 45.0})
 with st.expander("📊 Current Baseline Metrics"):
     st.json(baseline)
 
-# Projections
-srs = srs_from_literacy(baseline["Literacy"])
-grad = grad_rate(baseline["Absenteeism"])
-readiness = college_readiness(baseline["Internet_Access"])
-juv_risk = juvenile_risk(baseline["Youth_Programs"])
+st.subheader("🎛️ Adjust Metrics Manually")
+adjusted_absenteeism = st.slider("Absenteeism (%)", 0.0, 50.0, baseline["Absenteeism"], 0.1)
+adjusted_literacy = st.slider("Literacy Proficiency (%)", 60.0, 100.0, baseline["Literacy"], 0.1)
+adjusted_programs = st.slider("Youth Programs (count)", 0, 15, baseline["Youth_Programs"])
+adjusted_internet = st.slider("Homes with Internet (%)", 50.0, 100.0, baseline["Internet_Access"], 0.1)
 
-st.subheader("📈 Projected Outcomes (Current)")
-st.metric("Graduation Rate", f"{grad:.1f}%")
-st.metric("Success Risk Score (SRS)", f"{srs:.1f}")
-st.metric("College Readiness Index", f"{readiness:.1f}")
+# Projections
+srs = srs_from_literacy(adjusted_literacy)
+grad = grad_rate(adjusted_absenteeism)
+readiness = college_readiness(adjusted_internet)
+juv_risk = juvenile_risk(adjusted_programs)
+
+# Define goal thresholds and deltas
+target_srs = goals["SRS"]
+target_grad = goals["Grad"]
+target_readiness = goals["Readiness"]
+srs_delta = srs - target_srs
+grad_delta = grad - target_grad
+readiness_delta = readiness - target_readiness
+
+# Color-coded formatting
+def delta_color(value):
+    if value > 0:
+        return "🔴"
+    elif value < 0:
+        return "🟢"
+    else:
+        return "⚪"
+
+st.subheader("📈 Projected Outcomes (With Adjustments)")
+st.metric("Graduation Rate", f"{grad:.1f}%", delta=f"{grad_delta:+.1f} from goal {delta_color(-grad_delta)}")
+st.metric("Success Risk Score (SRS)", f"{srs:.1f}", delta=f"{srs_delta:+.1f} from goal {delta_color(-srs_delta)}")
+st.metric("College Readiness Index", f"{readiness:.1f}", delta=f"{readiness_delta:+.1f} from goal {delta_color(-readiness_delta)}")
 st.metric("Juvenile Risk Index", f"{juv_risk:.1f}")
 
 # --- GPT-BASED ACTION PLAN ---
 st.subheader("🧠 Suggested Intervention Plan")
-prompt = generate_prompt(county, baseline, goal_type)
+adjusted_data = {
+    "Absenteeism": adjusted_absenteeism,
+    "Literacy": adjusted_literacy,
+    "Youth_Programs": adjusted_programs,
+    "Internet_Access": adjusted_internet
+}
+prompt = generate_prompt(county, adjusted_data, goal_type)
 
 if st.button("💡 Generate Action Plan"):
     with st.spinner("Thinking like a policy analyst..."):
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a community strategist and education planner."},
@@ -69,7 +102,7 @@ metrics = ["Grad Rate", "SRS", "Readiness", "Juvenile Risk"]
 values = [grad, srs, readiness, juv_risk]
 colors = ["seagreen", "crimson", "orange", "dodgerblue"]
 ax.bar(metrics, values, color=colors)
-ax.set_title(f"{county} County – Baseline Outcomes")
+ax.set_title(f"{county} County – Adjusted Outcomes")
 st.pyplot(fig)
 
 st.caption("Built with ❤️ using GPT + Streamlit")
