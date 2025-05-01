@@ -42,10 +42,10 @@ with st.expander("📊 Current Baseline Metrics"):
     st.json(baseline)
 
 st.subheader("🎛️ Adjust Metrics Manually")
-adjusted_absenteeism = st.slider("Absenteeism (%)", 0.0, 50.0, baseline["Absenteeism"], 0.1)
-adjusted_literacy = st.slider("Literacy Proficiency (%)", 60.0, 100.0, baseline["Literacy"], 0.1)
-adjusted_programs = st.slider("Youth Programs (count)", 0, 15, baseline["Youth_Programs"])
-adjusted_internet = st.slider("Homes with Internet (%)", 50.0, 100.0, baseline["Internet_Access"], 0.1)
+adjusted_absenteeism = st.slider("Absenteeism (%)", 0.0, 50.0, float(baseline["Absenteeism"]), 0.1)
+adjusted_literacy = st.slider("Literacy Proficiency (%)", 60.0, 100.0, float(baseline["Literacy"]), 0.1)
+adjusted_programs = st.slider("Youth Programs (count)", 0, 15, int(baseline["Youth_Programs"]))
+adjusted_internet = st.slider("Homes with Internet (%)", 50.0, 100.0, float(baseline["Internet_Access"]), 0.1)
 
 # Projections
 srs = srs_from_literacy(adjusted_literacy)
